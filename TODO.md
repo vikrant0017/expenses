@@ -1,0 +1,11 @@
+- [ ] Use fastapi own sqlmodel package which using SQLAlchemy + Pydantic (The docs looks better and the setup is also similar)
+- [ ] Understand the pattern 
+- [ ] Configure pytest and tests
+- [ ] Use faker to add data (along with custom code for consistency like for maintaing splits for an expense)
+- [ ] Use the mock data in excel to compute aggreation dta and stuff and write tests to verify the actual operations
+- [ ] Do stress testing and also simulate failure between transactions (like failing between adding expense and split)
+- [ ] Configure dev and prod environment (db)
+- [ ] Add all the main required endpoints
+- [ ] Deploy just the backend 
+- [ ] Add user registration (just mobile registra) and also authentication and authorization (simple)
+Notes: Try to make the backend as robust as possible before moving to the frontend app

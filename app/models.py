@@ -1,12 +1,14 @@
 from datetime import datetime
-from typing import List, Optional
 from decimal import Decimal
+from typing import List, Optional
 
-from sqlalchemy import String, Integer, ForeignKey, Numeric, DateTime, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
 
 class Base(DeclarativeBase):
     pass
+
 
 class User(Base):
     __tablename__ = "users"
@@ -24,6 +26,7 @@ class User(Base):
     def __repr__(self) -> str:
         return f"<User(id={self.id}, name={self.name})>"
 
+
 class Group(Base):
     __tablename__ = "groups"
 
@@ -40,11 +43,13 @@ class Group(Base):
     def __repr__(self) -> str:
         return f"<Group(id={self.id}, name={self.name})>"
 
+
 class UserGroup(Base):
     __tablename__ = "user_group"
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), primary_key=True)
+
 
 class Expense(Base):
     __tablename__ = "expenses"
@@ -56,16 +61,23 @@ class Expense(Base):
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
     # Relationships
     group: Mapped["Group"] = relationship(back_populates="expenses")
     user: Mapped["User"] = relationship(back_populates="expenses")
-    splits: Mapped[List["Split"]] = relationship(back_populates="expense", cascade="all, delete-orphan")
+    splits: Mapped[List["Split"]] = relationship(
+        back_populates="expense", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Expense(id={self.id}, title={self.title}, amount={self.amount})>"
+
 
 class Split(Base):
     __tablename__ = "splits"
