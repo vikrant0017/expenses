@@ -2,11 +2,10 @@ from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import Session, select
 
-from app import models, schemas
-from app.database import get_db
+from app import models
+from app.database import get_session
 
 router = APIRouter(
     prefix="/expenses",
@@ -15,31 +14,27 @@ router = APIRouter(
 )
 
 
-@router.post("", response_model=schemas.ExpenseRead)
-async def create_expense(
-    expense: schemas.ExpenseCreate, db: AsyncSession = Depends(get_db)
+@router.post("", response_model=models.ExpenseRead)
+def create_expense(
+    expense: models.ExpenseCreate, session: Session = Depends(get_session)
 ):
     # Verify group and user exist (optional but good practice)
     # For simplicity, we assume they exist or let DB constraints handle it (will raise IntegrityError)
 
-    db_expense = models.Expense(
-        title=expense.title,
-        description=expense.description,
-        amount=expense.amount,
-        group_id=expense.group_id,
-        user_id=expense.user_id,
-        timestamp=datetime.utcnow(),  # In real app, might come from request
-    )
-    db.add(db_expense)
-    await db.commit()
-    await db.refresh(db_expense)
+    db_expense = models.Expense.model_validate(expense)
+    # Override timestamp if needed, or let default handle it. 
+    # The original code set timestamp=datetime.utcnow(), but model has default_factory.
+    # However, ExpenseCreate doesn't have timestamp, so it will use default.
+    
+    session.add(db_expense)
+    session.commit()
+    session.refresh(db_expense)
     return db_expense
 
 
-@router.get("", response_model=List[schemas.ExpenseRead])
-async def read_expenses(
-    skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)
+@router.get("", response_model=List[models.ExpenseRead])
+def read_expenses(
+    skip: int = 0, limit: int = 100, session: Session = Depends(get_session)
 ):
-    result = await db.execute(select(models.Expense).offset(skip).limit(limit))
-    expenses = result.scalars().all()
+    expenses = session.exec(select(models.Expense).offset(skip).limit(limit)).all()
     return expenses

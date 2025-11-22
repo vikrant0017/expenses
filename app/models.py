@@ -2,96 +2,97 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 
-class Base(DeclarativeBase):
+# --- User Models ---
+class UserBase(SQLModel):
+    name: str
+
+class User(UserBase, table=True):
+    __tablename__ = "users"
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    # Relationships
+    groups: List["Group"] = Relationship(back_populates="users", link_model="UserGroup")
+    expenses: List["Expense"] = Relationship(back_populates="user")
+    splits: List["Split"] = Relationship(back_populates="user")
+
+class UserCreate(UserBase):
     pass
 
-
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-
-    # Relationships
-    groups: Mapped[List["Group"]] = relationship(
-        secondary="user_group", back_populates="users"
-    )
-    expenses: Mapped[List["Expense"]] = relationship(back_populates="user")
-    splits: Mapped[List["Split"]] = relationship(back_populates="user")
-
-    def __repr__(self) -> str:
-        return f"<User(id={self.id}, name={self.name})>"
+class UserRead(UserBase):
+    id: int
 
 
-class Group(Base):
+# --- Group Models ---
+class GroupBase(SQLModel):
+    name: str
+
+class Group(GroupBase, table=True):
     __tablename__ = "groups"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
+    id: Optional[int] = Field(default=None, primary_key=True)
 
     # Relationships
-    users: Mapped[List["User"]] = relationship(
-        secondary="user_group", back_populates="groups"
-    )
-    expenses: Mapped[List["Expense"]] = relationship(back_populates="group")
-    splits: Mapped[List["Split"]] = relationship(back_populates="group")
+    users: List["User"] = Relationship(back_populates="groups", link_model="UserGroup")
+    expenses: List["Expense"] = Relationship(back_populates="group")
+    splits: List["Split"] = Relationship(back_populates="group")
 
-    def __repr__(self) -> str:
-        return f"<Group(id={self.id}, name={self.name})>"
+class GroupCreate(GroupBase):
+    pass
+
+class GroupRead(GroupBase):
+    id: int
 
 
-class UserGroup(Base):
+# --- Link Models ---
+class UserGroup(SQLModel, table=True):
     __tablename__ = "user_group"
+    user_id: Optional[int] = Field(default=None, foreign_key="users.id", primary_key=True)
+    group_id: Optional[int] = Field(default=None, foreign_key="groups.id", primary_key=True)
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), primary_key=True)
 
+# --- Expense Models ---
+class ExpenseBase(SQLModel):
+    title: str
+    description: Optional[str] = None
+    amount: Decimal = Field(default=0, max_digits=10, decimal_places=2)
+    group_id: int = Field(foreign_key="groups.id")
+    user_id: int = Field(foreign_key="users.id") # Payer
 
-class Expense(Base):
+class Expense(ExpenseBase, table=True):
     __tablename__ = "expenses"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), nullable=False)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    title: Mapped[str] = mapped_column(String, nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
-    )
+    id: Optional[int] = Field(default=None, primary_key=True)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow) # Note: onupdate behavior needs manual handling or DB trigger in SQLModel usually, but for now keeping simple
 
     # Relationships
-    group: Mapped["Group"] = relationship(back_populates="expenses")
-    user: Mapped["User"] = relationship(back_populates="expenses")
-    splits: Mapped[List["Split"]] = relationship(
-        back_populates="expense", cascade="all, delete-orphan"
-    )
+    group: Optional[Group] = Relationship(back_populates="expenses")
+    user: Optional[User] = Relationship(back_populates="expenses")
+    splits: List["Split"] = Relationship(back_populates="expense", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
-    def __repr__(self) -> str:
-        return f"<Expense(id={self.id}, title={self.title}, amount={self.amount})>"
+class ExpenseCreate(ExpenseBase):
+    pass
+
+class ExpenseRead(ExpenseBase):
+    id: int
+    timestamp: datetime
+    created_at: datetime
 
 
-class Split(Base):
+# --- Split Models ---
+class SplitBase(SQLModel):
+    amount: Decimal = Field(default=0, max_digits=10, decimal_places=2)
+    group_id: int = Field(foreign_key="groups.id")
+    expense_id: int = Field(foreign_key="expenses.id")
+    user_id: int = Field(foreign_key="users.id")
+
+class Split(SplitBase, table=True):
     __tablename__ = "splits"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), nullable=False)
-    expense_id: Mapped[int] = mapped_column(ForeignKey("expenses.id"), nullable=False)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    id: Optional[int] = Field(default=None, primary_key=True)
 
     # Relationships
-    group: Mapped["Group"] = relationship(back_populates="splits")
-    expense: Mapped["Expense"] = relationship(back_populates="splits")
-    user: Mapped["User"] = relationship(back_populates="splits")
-
-    def __repr__(self) -> str:
-        return f"<Split(id={self.id}, amount={self.amount}, user_id={self.user_id})>"
+    group: Optional[Group] = Relationship(back_populates="splits")
+    expense: Optional[Expense] = Relationship(back_populates="splits")
+    user: Optional[User] = Relationship(back_populates="splits")

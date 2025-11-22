@@ -1,11 +1,10 @@
 from typing import List
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import Session, select
 
-from app import models, schemas
-from app.database import get_db
+from app import models
+from app.database import get_session
 
 router = APIRouter(
     prefix="/users",
@@ -14,21 +13,18 @@ router = APIRouter(
 )
 
 
-@router.post("", response_model=schemas.UserRead)
-async def create_user(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
-    db_user = models.User(name=user.name)
-    db.add(db_user)
-    await db.commit()
-    await db.refresh(db_user)
+@router.post("", response_model=models.UserRead)
+def create_user(user: models.UserCreate, session: Session = Depends(get_session)):
+    db_user = models.User.model_validate(user)
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
     return db_user
 
 
-@router.get("", response_model=List[schemas.UserRead])
-async def read_users(
-    skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)
+@router.get("", response_model=List[models.UserRead])
+def read_users(
+    skip: int = 0, limit: int = 100, session: Session = Depends(get_session)
 ):
-    print("NAAAAAH")
-    result = await db.execute(select(models.User).offset(skip).limit(limit))
-    print(result)
-    users = result.scalars().all()
+    users = session.exec(select(models.User).offset(skip).limit(limit)).all()
     return users
