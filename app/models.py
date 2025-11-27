@@ -62,6 +62,7 @@ class Group(GroupBase, table=True):
 
 
 class GroupCreate(GroupBase):
+    user_id: int  # The user requesting to make the group
     pass
 
 
@@ -85,7 +86,6 @@ class ExpenseBase(SQLModel):
     @field_serializer("amount", when_used="json")
     def convert_to_float(self, amount) -> float:
         return float(amount)
-
 
 
 class Expense(ExpenseBase, table=True):

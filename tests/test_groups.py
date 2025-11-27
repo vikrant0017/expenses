@@ -1,0 +1,136 @@
+from decimal import Decimal
+from typing import override
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlmodel import Session, SQLModel, create_engine, select
+
+from app import models
+from app.database import get_session
+from app.main import app
+from app.models import Group, User, UserGroup
+
+TEST_DATABASE_URL = "postgresql://postgres:password@localhost:5432/postgres"
+
+engine = create_engine(TEST_DATABASE_URL, echo=False)
+SQLModel.metadata.drop_all(engine, checkfirst=True)
+SQLModel.metadata.create_all(engine, checkfirst=True)
+
+
+class NoCommitSession(Session):
+    @override
+    def commit(self):
+        self.flush()
+
+
+@pytest.fixture(scope="module")
+def global_session():
+    with NoCommitSession(engine) as session:
+        yield session
+        session.rollback()
+
+
+@pytest.fixture
+def session(global_session: Session):
+    with global_session.begin_nested() as savepoint:
+        yield global_session
+        savepoint.rollback()
+
+
+@pytest.fixture()
+def client(session):
+    def get_session_overide():
+        return session
+
+    # Ques :Why does this dependency injection feels weird? Why would you need that actual object "get_sesson"
+    app.dependency_overrides[get_session] = get_session_overide
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="module", name="users")
+def fixture_users(global_session: Session):
+    user1 = models.User(name="Foo")
+    user2 = models.User(name="Bar")
+    global_session.add(user1)
+    global_session.add(user2)
+    global_session.commit()
+
+    global_session.refresh(user1)
+    global_session.refresh(user2)
+    return [user1, user2]
+
+
+# TODO: Create some helpers for these fixtures
+@pytest.fixture(scope="module", name="groups")
+def fixture_groups(global_session, users):
+    """
+    Add some groups and associate each group with a user
+    """
+    group1 = models.Group(name="Group 1")
+    group2 = models.Group(name="Group 2")
+    group3 = models.Group(name="Group 3")
+
+    global_session.add(group1)
+    global_session.add(group2)
+    global_session.add(group3)
+
+    global_session.flush()
+
+    user_group1 = models.UserGroup(user_id=users[0].id, group_id=group1.id)
+    user_group2 = models.UserGroup(user_id=users[0].id, group_id=group2.id)
+    user_group3 = models.UserGroup(user_id=users[1].id, group_id=group3.id)
+
+    global_session.add(user_group1)
+    global_session.add(user_group2)
+    global_session.add(user_group3)
+
+    global_session.flush()
+
+    global_session.refresh(group1)
+    global_session.refresh(group2)
+    return [group1, group2]
+
+
+def test_create_group(client: TestClient, users, session):
+    """
+    It should create a group and also add the user to the group implicity
+    """
+    user = users[0]
+    response = client.post("/groups", json={"user_id": user.id, "name": "Goa"})
+    data = response.json()
+    assert response.status_code == 200
+    assert data["name"] == "Goa"
+    assert "id" in data
+
+    # Test that a user is associated with the group
+    user_group = session.exec(
+        select(models.UserGroup).where(
+            models.UserGroup.user_id == user.id, models.UserGroup.group_id == data["id"]
+        )
+    ).all()
+    assert len(user_group) == 1
+    assert user_group[0].user_id == user.id
+    assert user_group[0].group_id == data["id"]
+
+
+def test_read_group_user_1(client: TestClient, users, groups):
+    response = client.get(f"/groups?user_id={1}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+
+
+def test_read_group_user_2(client: TestClient, users, groups):
+    response = client.get(f"/groups?user_id={2}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+
+
+def test_read_group_user_3(client: TestClient, users, groups):
+    response = client.get(f"/groups?user_id={3}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0

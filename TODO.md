@@ -1,6 +1,7 @@
-- [ ] Use fastapi own sqlmodel package which using SQLAlchemy + Pydantic (The docs looks better and the setup is also similar)
-- [ ] Understand the pattern 
-- [ ] Configure pytest and tests
+- [x] Configure pytest and tests
+- [ ] Add row level security to postgress
+- [ ] Add authentication
+- [ ] Add constraint to groups such as a group must be associated with a user (i.e) UserGroup must have a row
 - [ ] Use faker to add data (along with custom code for consistency like for maintaing splits for an expense)
 - [ ] Use the mock data in excel to compute aggreation dta and stuff and write tests to verify the actual operations
 - [ ] Do stress testing and also simulate failure between transactions (like failing between adding expense and split)
