@@ -33,6 +33,9 @@ def fixture_groups(global_session, users):
     global_session.add(group3)
 
     global_session.flush()
+    global_session.refresh(group1)
+    global_session.refresh(group2)
+    global_session.refresh(group3)
 
     user_group1 = models.UserGroup(user_id=users[0].id, group_id=group1.id)
     user_group2 = models.UserGroup(user_id=users[0].id, group_id=group2.id)
@@ -44,8 +47,6 @@ def fixture_groups(global_session, users):
 
     global_session.flush()
 
-    global_session.refresh(group1)
-    global_session.refresh(group2)
     return [group1, group2]
 
 
@@ -72,21 +73,22 @@ def test_create_group(client: TestClient, users, session):
 
 
 def test_read_group_user_1(client: TestClient, users, groups):
-    response = client.get(f"/groups?user_id={1}")
+    response = client.get(f"/groups?user_id={users[0].id}")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
 
 
 def test_read_group_user_2(client: TestClient, users, groups):
-    response = client.get(f"/groups?user_id={2}")
+    response = client.get(f"/groups?user_id={users[1].id}")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
 
 
 def test_read_group_user_3(client: TestClient, users, groups):
-    response = client.get(f"/groups?user_id={3}")
+    non_existing_user_id = 100
+    response = client.get(f"/groups?user_id={non_existing_user_id}")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 0
