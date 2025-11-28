@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from app import models
 from app.database import get_session
-from app.models import Expense, Group, User, UserGroup
+from app.models import Expense, UserGroup
 
 router = APIRouter(
     prefix="/expenses",
