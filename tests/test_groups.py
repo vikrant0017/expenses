@@ -1,52 +1,8 @@
-from decimal import Decimal
-from typing import override
-
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, select
 
 from app import models
-from app.database import get_session
-from app.main import app
-from app.models import Group, User, UserGroup
-
-TEST_DATABASE_URL = "postgresql://postgres:password@localhost:5432/postgres"
-
-engine = create_engine(TEST_DATABASE_URL, echo=False)
-SQLModel.metadata.drop_all(engine, checkfirst=True)
-SQLModel.metadata.create_all(engine, checkfirst=True)
-
-
-class NoCommitSession(Session):
-    @override
-    def commit(self):
-        self.flush()
-
-
-@pytest.fixture(scope="module")
-def global_session():
-    with NoCommitSession(engine) as session:
-        yield session
-        session.rollback()
-
-
-@pytest.fixture
-def session(global_session: Session):
-    with global_session.begin_nested() as savepoint:
-        yield global_session
-        savepoint.rollback()
-
-
-@pytest.fixture()
-def client(session):
-    def get_session_overide():
-        return session
-
-    # Ques :Why does this dependency injection feels weird? Why would you need that actual object "get_sesson"
-    app.dependency_overrides[get_session] = get_session_overide
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="module", name="users")
