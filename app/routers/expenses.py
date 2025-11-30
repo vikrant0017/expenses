@@ -18,7 +18,10 @@ router = APIRouter(
 def create_expense(
     expense: models.ExpenseCreate, session: Session = Depends(get_session)
 ):
+    # Will automatically handle inserting splits into Splits table since we have defined in the Relationship
+    # to backpopulate Expense.splits with Splits.expense
     db_expense = models.Expense.model_validate(expense)
+
     session.add(db_expense)
     session.commit()
     session.refresh(db_expense)

@@ -1,10 +1,11 @@
 from decimal import Decimal
+from typing import List
 
 import pytest
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import models
-from app.models import UserGroup
+from app.models import Expense, Group, Split, User, UserGroup
 
 
 @pytest.fixture(scope="module", name="users")
@@ -33,8 +34,8 @@ def fixture_groups(global_session):
     return [group1, group2]
 
 
-@pytest.fixture(scope="module")
-def expenses(global_session: Session, groups, users):
+@pytest.fixture()
+def expenses(session: Session, groups, users):
     """Add users to group and add multiple expenses for each user in each group"""
     expenses_list = []
     user_group_list = []
@@ -49,32 +50,58 @@ def expenses(global_session: Session, groups, users):
                 amount=Decimal("50.45"),
                 group_id=g.id,
                 user_id=u.id,
+                splits=[
+                    Split(
+                        user_id=u.id,
+                        expense_id=1,
+                        group_id=g.id,
+                        amount=Decimal("30"),
+                    ),  # pyright: ignore[reportArgumentType]
+                    Split(
+                        user_id=u.id,
+                        group_id=g.id,
+                        expense_id=1,
+                        amount=Decimal("70"),
+                    ),  # pyright: ignore[reportArgumentType]
+                ],
             )
+
             expense2 = models.Expense(
                 title=f"{u.name} - Dinner ({g.name})",
                 amount=Decimal("20.45"),
                 group_id=g.id,
                 user_id=u.id,
+                splits=[
+                    # Note: expense_id even though is required, is handled by the sql alchemy internally due to relatiionship definition
+                    # therefore we are ignoring the error. I am not sure sure how pydantic lets this though
+                    Split(  # pyright: ignore[reportCallIssue]
+                        user_id=u.id,
+                        group_id=g.id,
+                        amount=Decimal("40"),
+                    ),
+                    Split(  # pyright: ignore[reportCallIssue]
+                        user_id=u.id,
+                        group_id=g.id,
+                        amount=Decimal("60"),
+                    ),  # pyright: ignore[reportArgumentType]
+                ],
             )
 
-            global_session.add(expense1)
-            global_session.add(expense2)
+            session.add(expense1)
+            session.add(expense2)
             expenses_list.extend([expense1, expense2])
-            global_session.add(user_group)
+            session.add(user_group)
             user_group_list.append(user_group)
 
     # This is required since it will flush since we intercept commit.
     # Also refresh wont work without flushing and will raise error
-    global_session.commit()
+    session.commit()
     for exp in expenses_list:
-        global_session.refresh(exp)
+        session.refresh(exp)
     for ug in user_group_list:
-        global_session.refresh(ug)
+        session.refresh(ug)
 
     return expenses_list
-
-
-def test_expenses_fixture(expenses): ...
 
 
 def test_create_expense(client, users, groups):
@@ -130,3 +157,70 @@ def test_user_group_expenses2(client, users, expenses):
     data = res.json()
     assert res.status_code == 404
     assert "No association exists" in data["detail"]
+
+
+def test_create_expense_with_splits(
+    client, session: Session, users: List[User], groups: List[Group]
+):
+    user = users[0]
+    group = groups[0]
+    payload = {
+        "title": "Lunch",
+        "amount": 100,
+        "group_id": group.id,
+        "user_id": user.id,
+        "splits": [
+            {
+                "user_id": user.id,  # This is id of each in the group
+                "group_id": group.id,  # TODO: This is redundant. Remove it from model
+                "amount": 30,
+            },
+            {
+                "user_id": user.id,  # This is id of each in the group
+                "group_id": group.id,
+                "amount": 70,
+            },
+        ],
+    }
+
+    response = client.post("/expenses", json=payload)
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert "splits" in data
+    assert len(data["splits"]) == 2
+
+    db_expense = session.exec(select(Expense)).all()
+    db_splits = session.exec(select(Split)).all()
+
+    assert len(db_expense) == 1
+    assert len(db_splits) == 2
+
+    assert db_expense[0].title == payload["title"]
+    assert db_expense[0].amount == payload["amount"]
+    assert db_expense[0].group_id == payload["group_id"]
+    assert db_expense[0].user_id == payload["user_id"]
+
+    assert db_splits[0].user_id == payload["user_id"]
+    assert db_splits[0].amount == payload["splits"][0]["amount"]
+    assert db_splits[1].user_id == payload["user_id"]
+    assert db_splits[1].amount == payload["splits"][1]["amount"]
+
+
+def test_cascade_splits_delete(expenses, session: Session):
+    """Deleting expense should automatically delete all the splits"""
+    expense = expenses[0]
+    db_splits_pre_delete = session.exec(
+        select(Split).where(Split.expense_id == expense.id)
+    ).all()
+    assert len(db_splits_pre_delete) == 2
+
+    # Perfrom a delete on expense and check if its expenses are deleted
+    session.delete(expense)
+    session.commit()
+    # session.refresh(expense) # This does work after the obj is deleted from session. Throws Error
+    db_splits_post_delete = session.exec(
+        select(Split).where(Split.expense_id == expense.id)
+    ).all()
+    assert len(db_splits_post_delete) == 0

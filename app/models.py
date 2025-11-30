@@ -1,6 +1,5 @@
 from datetime import UTC, datetime
 from decimal import Decimal
-from pathlib import Path
 from typing import List, Optional
 
 from pydantic import field_serializer
@@ -100,24 +99,33 @@ class Expense(ExpenseBase, table=True):
     # Relationships
     group: Optional[Group] = Relationship(back_populates="expenses")
     user: Optional[User] = Relationship(back_populates="expenses")
-    splits: List["Split"] = Relationship(back_populates="expense", cascade_delete=True)
+    splits: list["Split"] = Relationship(
+        back_populates="expense",
+        cascade_delete=True,
+    )  # Cascade handled by ALchemy ORM
 
 
 class ExpenseCreate(ExpenseBase):
-    pass
+    splits: list[
+        "Split"
+    ] = []  # Empty list as default since Expense splits relationship expects it to be a list
 
 
 class ExpenseRead(ExpenseBase):
     id: int
     timestamp: datetime
     created_at: datetime
+    updated_at: datetime
+    splits: list["Split"] | None
 
 
 # --- Split Models ---
 class SplitBase(SQLModel):
     amount: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     group_id: int = Field(foreign_key="groups.id")
-    expense_id: int = Field(foreign_key="expenses.id", ondelete="CASCADE")
+    expense_id: int = Field(
+        foreign_key="expenses.id", ondelete="CASCADE"
+    )  # Cascade handled by DB
     user_id: int = Field(foreign_key="users.id")
 
 
