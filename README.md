@@ -1,1 +1,1 @@
-Restful API for expense tracking and spitting.
+# Expense Manager
