@@ -19,3 +19,6 @@ wheels/
 .env
 .env.local
 .env.prod
+
+# Backlog.md directory
+backlog/

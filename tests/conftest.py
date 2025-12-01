@@ -33,15 +33,19 @@ def global_session(engine):
         session.rollback()
 
 
-@pytest.fixture
+@pytest.fixture(scope="function", autouse=True)
 def session(global_session: Session):
     with global_session.begin_nested() as savepoint:
         yield global_session
         savepoint.rollback()
 
 
-@pytest.fixture()
-def client(session):
+@pytest.fixture(scope="function")
+def client(request):
+    session = request.getfixturevalue(
+        "session"
+    )  # Use the same session of the specific test
+
     def get_session_overide():
         return session
 
