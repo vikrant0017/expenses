@@ -12,7 +12,7 @@ PG_PASSWORD = os.getenv("PG_PASSWORD", "password")
 PG_DB = os.getenv("PG_DB", "postgres")
 PG_PORT = os.getenv("PG_PORT", "5432")
 
-DEBUG_SQL = os.getenv("DEBUG_SQL", False)
+DEBUG_SQL = True if os.getenv("DEBUG_SQL") == "true" else False
 
 DATABASE_URL = f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DB}"
 

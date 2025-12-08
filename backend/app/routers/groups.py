@@ -1,10 +1,12 @@
-from typing import List
+from typing import Annotated, List
 
 from fastapi import APIRouter, Depends
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app import models
+from app.crud.groups import create_group, get_user_groups
 from app.database import get_session
+from app.deps import get_current_user
 
 router = APIRouter(
     prefix="/groups",
@@ -14,38 +16,23 @@ router = APIRouter(
 
 
 @router.post("", response_model=models.GroupRead)
-def create_groups(group: models.GroupCreate, session: Session = Depends(get_session)):
-    """
-    Note: Groups can't be created in isolation - it must be associated with the user who requested
-    for the group creation - the admin
-    """
-    # Skipping user_id verification not required as it will be performed as part of auth later
-    db_group = models.Group.model_validate(group)
+def create_groups(
+    group: models.GroupCreate,
+    user_id: Annotated[int, Depends(get_current_user)],
+    session: Session = Depends(get_session),
+):
+    """Create a new group associated with the user"""
 
-    session.add(db_group)
-    session.flush()  # We dont want to commit now since this will commit the transaction
-    session.refresh(db_group)
-
-    user_group = models.UserGroup(user_id=group.user_id, group_id=db_group.id)
-    session.add(user_group)
-    session.commit()
-
-    return db_group
+    created_group = create_group(session, user_id, group)
+    return created_group
 
 
-@router.get("", response_model=List[models.UserRead])
+@router.get("", response_model=List[models.GroupRead])
 def read_groups(
-    user_id: int,
+    user_id: Annotated[int, Depends(get_current_user)],
     skip: int = 0,
     limit: int = 100,
     session: Session = Depends(get_session),
 ):
-    """Fetch all the groups of the users"""
-    users = session.exec(
-        select(models.Group)
-        .join(models.UserGroup)
-        .where(models.UserGroup.user_id == user_id)
-        .offset(skip)
-        .limit(limit)
-    ).all()
-    return users
+    """Get all the groups of a user"""
+    return get_user_groups(session, user_id, skip, limit)

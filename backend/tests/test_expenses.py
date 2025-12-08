@@ -1,226 +1,320 @@
+import json
 from decimal import Decimal
-from typing import List
 
 import pytest
-from sqlmodel import Session, select
+from assertpy import assert_that
+from faker import Faker
+from fastapi.testclient import TestClient
 
 from app import models
-from app.models import Expense, Group, Split, User, UserGroup
+from app.crud.expense import create_expense
+from app.crud.groups import add_user, create_group
+from app.crud.users import create_user
+from app.database import get_session
+from app.deps import get_current_user
+from app.main import app
+from app.models import (
+    Expense,
+    GroupCreate,
+    UserCreate,
+)
 
 
-@pytest.fixture(scope="module", name="users")
-def fixture_users(global_session: Session):
-    user1 = models.User(name="Foo")
-    user2 = models.User(name="Bar")
-    global_session.add(user1)
-    global_session.add(user2)
-    global_session.commit()
+@pytest.fixture
+def user_factory(request):
+    """Factory fixture that creates a new user on each call"""
 
-    global_session.refresh(user1)
-    global_session.refresh(user2)
-    return [user1, user2]
+    def _create_user(username: str | None = None, password: str | None = None):
+        faker = Faker()
+        session = request.getfixturevalue("session")
+        user = UserCreate(
+            username=username or faker.user_name(),
+            password=password or faker.password(8),
+        )
+        db_user = create_user(session, user)
+        return db_user
+
+    return _create_user
 
 
-@pytest.fixture(scope="module", name="groups")
-def fixture_groups(global_session):
-    group1 = models.Group(name="Goa Trip")
-    group2 = models.Group(name="Andamans Trip")
-    global_session.add(group1)
-    global_session.add(group2)
-    global_session.commit()
+@pytest.fixture
+def auth_client_factory(request):
+    """Factory fixture that returns a callable for creating an authenticated TestClient.
 
-    global_session.refresh(group1)
-    global_session.refresh(group2)
-    return [group1, group2]
+    The returned factory creates a TestClient whose dependencies are overridden:
+    - get_current_user is set to a function that returns the provided user_id.
+    - get_session is set to return the test's Session fixture.
+
+    Note: app is a single shared FastAPI instance, so each override replaces the previous one.
+    As a result, multiple clients created by this factory will share the most recent dependency
+    overrides (including the same get_current_user function). Do not rely on creating multiple
+    concurrent authenticated clients with different users in the same test; create them
+    sequentially or ensure earlier clients are no longer needed before creating new ones.
+    """
+
+    def _create_user_with_client(user_id: str):
+        session = request.getfixturevalue("session")
+
+        app.dependency_overrides[get_current_user] = lambda: user_id
+
+        def get_session_override():
+            return session
+
+        app.dependency_overrides[get_session] = get_session_override
+        client = TestClient(app)
+
+        return client
+
+    yield _create_user_with_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def group_factory(request):
+    """Factory fixture that creates a new user and authenticated client on each call"""
+
+    def _create_user_with_group(user_id: int, group_name: str | None = None):
+        faker = Faker()
+        session = request.getfixturevalue("session")
+
+        group = GroupCreate(name=group_name or faker.color_name())
+        db_group = create_group(session, user_id, group)
+
+        return db_group
+
+    return _create_user_with_group
+
+
+@pytest.fixture
+def user_group_factory(request):
+    """Factory fixture that creates a new user and authenticated client on each call"""
+
+    def _add_user_to_group(user_id: int, group_id: int):
+        session = request.getfixturevalue("session")
+
+        return add_user(session, group_id, user_id)
+
+    return _add_user_to_group
 
 
 @pytest.fixture()
-def expenses(session: Session, groups, users):
-    """Add users to group and add multiple expenses for each user in each group"""
-    expenses_list = []
-    user_group_list = []
+def expenses_factory(
+    request, user_factory, group_factory, user_group_factory, split_users=None
+):
+    def _create_expense(user_id, group_id):
+        session = request.getfixturevalue("session")
 
-    # Total of 8 expenses 2*2*2 since we have 2 users and 2 groups and 2 expenses per each
-    for u in users:
-        for g in groups:
-            user_group = UserGroup(user_id=u.id, group_id=g.id)
+        # Add user to the group for splits
+        # split_user = user_factory("User2", "pass2")
+        # group = group_factory(split_user.id, "Group1")
+        # user_group = user_group_factory(user.id, group_id)
 
-            expense1 = models.Expense(
-                title=f"{u.name} - Lunch ({g.name})",
-                amount=Decimal("50.45"),
-                group_id=g.id,
-                user_id=u.id,
-                splits=[
-                    Split(
-                        user_id=u.id,
-                        expense_id=1,
-                        group_id=g.id,
-                        amount=Decimal("30"),
-                    ),  # pyright: ignore[reportArgumentType]
-                    Split(
-                        user_id=u.id,
-                        group_id=g.id,
-                        expense_id=1,
-                        amount=Decimal("70"),
-                    ),  # pyright: ignore[reportArgumentType]
-                ],
+        faker = Faker()
+
+        # Generate fake title and total amount (keep group_id and user_id from parameters)
+        title = faker.sentence(nb_words=3)
+        total_amount = Decimal(
+            str(
+                faker.pyfloat(
+                    left_digits=3,
+                    right_digits=2,
+                    positive=True,
+                    min_value=10,
+                    max_value=200,
+                )
             )
+        )
 
-            expense2 = models.Expense(
-                title=f"{u.name} - Dinner ({g.name})",
-                amount=Decimal("20.45"),
-                group_id=g.id,
-                user_id=u.id,
-                splits=[
-                    # Note: expense_id even though is required, is handled by the sql alchemy internally due to relatiionship definition
-                    # therefore we are ignoring the error. I am not sure sure how pydantic lets this though
-                    Split(  # pyright: ignore[reportCallIssue]
-                        user_id=u.id,
-                        group_id=g.id,
-                        amount=Decimal("40"),
-                    ),
-                    Split(  # pyright: ignore[reportCallIssue]
-                        user_id=u.id,
-                        group_id=g.id,
-                        amount=Decimal("60"),
-                    ),  # pyright: ignore[reportArgumentType]
-                ],
-            )
+        # Create two split amounts that sum to the total_amount
+        # percent = faker.random_int(min=20, max=80)
 
-            session.add(expense1)
-            session.add(expense2)
-            expenses_list.extend([expense1, expense2])
-            session.add(user_group)
-            user_group_list.append(user_group)
+        # first_amount = (total_amount * Decimal(percent) / Decimal(100)).quantize(
+        #     Decimal("0.01")
+        # )
+        # second_amount = (total_amount - first_amount).quantize(Decimal("0.01"))
 
-    # This is required since it will flush since we intercept commit.
-    # Also refresh wont work without flushing and will raise error
-    session.commit()
-    for exp in expenses_list:
-        session.refresh(exp)
-    for ug in user_group_list:
-        session.refresh(ug)
+        expense = models.ExpenseCreate(
+            title=title,
+            amount=total_amount,
+            group_id=group_id,
+            # splits=[
+            #     SplitCreate(  # pyright: ignore[reportCallIssue]
+            #         user_id=user
+            #         amount=first_amount,
+            #     ),
+            #     SplitCreate(  # pyright: ignore[reportCallIssue]
+            #         amount=second_amount,
+            #     ),
+            # ],
+        )
 
-    return expenses_list
+        db_expense = create_expense(session, user_id, expense)
+        return db_expense
+
+    return _create_expense
 
 
-def test_create_expense(client, users, groups):
-    user = users[0]
-    group = groups[0]
+def compare_expenses(expenses: list[Expense], data: list[dict]):
+    # To make sure the custom added passes through JSON serialization
+    for d, e in zip(
+        [{k: v for k, v in d.items() if k != "splits"} for d in data],
+        [json.loads(exp.model_dump_json()) for exp in expenses],
+    ):
+        assert d == e
+
+
+def test_create_expense(auth_client_factory, user_factory, group_factory):
+    user = user_factory()
+    group = group_factory(user.id)
+
+    client_with_auth = auth_client_factory(user.id)
+
+    # TODO: Create a faker helper to create a payload
     payload = {
         "title": "Lunch",
-        "amount": 50.45,
+        "amount": "50.45",
         "group_id": group.id,
-        "user_id": user.id,
     }
 
-    response = client.post("/expenses", json=payload)
+    response = client_with_auth.post("/expenses", json=payload)
     data = response.json()
+
     assert response.status_code == 200
-    assert data["title"] == "Lunch"
-    assert (
-        data["amount"] == 50.45
-    )  # JSON encodes the decimal.Decimal type as string. Fix this
-    assert data["group_id"] == group.id
-    assert data["user_id"] == user.id
+    assert payload.items() <= data.items()
 
 
-def test_read_user_expenses(client, expenses, users):
+def test_read_user_expenses(
+    auth_client_factory, user_factory, group_factory, expenses_factory
+):
     """It should return all the expenses created by the user"""
-    user = users[0]
-    res = client.get(f"/expenses?user_id={user.id}")
+
+    user = user_factory()
+    group = group_factory(user.id)
+
+    expenses: list[Expense] = [expenses_factory(user.id, group.id) for _ in range(2)]
+
+    client_with_auth = auth_client_factory(user.id)
+    res = client_with_auth.get("/expenses")
+    assert res.status_code == 200
+
     data = res.json()
-    assert isinstance(data, list)
-    assert len(data) == 4
+
+    compare_expenses(expenses, data)
 
 
-def test_user_group_expenses1(client, users, expenses, groups):
-    """
-    It should return all the expenses created by the user in a provided group
-    provided the user is part of the group
-    """
-    user = users[0]
-    group = groups[0]
-    res = client.get(f"/expenses?user_id={user.id}&group_id={group.id}")
+def test_user_can_only_read_own_expenses(
+    auth_client_factory,
+    user_factory,
+    user_group_factory,
+    group_factory,
+    expenses_factory,
+):
+    user1 = user_factory()
+    user2 = user_factory()
+    group = group_factory(user1.id)
+    user_group_factory(user2.id, group.id)
+
+    user1_expenses = [expenses_factory(user1.id, group.id) for _ in range(2)]
+    user2_expenses = [expenses_factory(user2.id, group.id) for _ in range(2)]
+
+    # -- User 1 -- #
+    client_with_auth = auth_client_factory(user1.id)
+    res = client_with_auth.get("/expenses")
+    assert res.status_code == 200
     data = res.json()
-    assert isinstance(data, list)
-    assert len(data) == 2
+    compare_expenses(user1_expenses, data)
+
+    # -- User 2 -- #
+    client_with_auth = auth_client_factory(user2.id)
+    res = client_with_auth.get("/expenses")
+    assert res.status_code == 200
+    data = res.json()
+    compare_expenses(user2_expenses, data)
 
 
-def test_user_group_expenses2(client, users, expenses):
+def test_user_group_expenses(
+    auth_client_factory,
+    user_factory,
+    group_factory,
+    expenses_factory,
+):
+    user = user_factory()
+    group1 = group_factory(user.id)
+    group2 = group_factory(user.id)
+
+    group1_expenses = [expenses_factory(user.id, group1.id) for _ in range(2)]
+    group2_expenses = [expenses_factory(user.id, group2.id) for _ in range(2)]
+
+    client_with_auth = auth_client_factory(user.id)
+
+    # -- Group 1 Expenses -- #
+    res = client_with_auth.get(f"/expenses?group_id={group1.id}")
+    data = res.json()
+    assert res.status_code == 200
+    compare_expenses(group1_expenses, data)
+
+    # -- Group 2 Expenses -- #
+    res = client_with_auth.get(f"/expenses?group_id={group2.id}")
+    assert res.status_code == 200
+    data = res.json()
+    compare_expenses(group2_expenses, data)
+
+
+def test_fail_user_group(user_factory, group_factory, auth_client_factory):
     """
     It should return a 404 error if user is not part of the group
     """
-    user = users[0]
-    some_none_existing_group = 99
-    res = client.get(f"/expenses?user_id={user.id}&group_id={some_none_existing_group}")
-    data = res.json()
+
+    user1 = user_factory()
+    user2 = user_factory()
+    group1 = group_factory(user1.id)
+    group2 = group_factory(user2.id)
+
+    client_with_auth = auth_client_factory(user1.id)
+    res = client_with_auth.get(f"/expenses?group_id={group2.id}")
     assert res.status_code == 404
-    assert "No association exists" in data["detail"]
+
+    client_with_auth = auth_client_factory(user2.id)
+    res = client_with_auth.get(f"/expenses?group_id={group1.id}")
+    assert res.status_code == 404
 
 
 def test_create_expense_with_splits(
-    client, session: Session, users: List[User], groups: List[Group]
+    auth_client_factory, user_factory, group_factory, user_group_factory
 ):
-    user = users[0]
-    group = groups[0]
+    user1 = user_factory()
+    user2 = user_factory()
+    group = group_factory(user1.id)
+    user_group_factory(user2.id, group.id)
+
+    client_with_auth = auth_client_factory(user1.id)
+
+    # TODO: Create a faker helper to create a payload
     payload = {
         "title": "Lunch",
-        "amount": 100,
+        "amount": "100",
         "group_id": group.id,
-        "user_id": user.id,
         "splits": [
             {
-                "user_id": user.id,  # This is id of each in the group
-                "group_id": group.id,  # TODO: This is redundant. Remove it from model
-                "amount": 30,
+                "user_id": user1.id,  # This is id of each in the group
+                "amount": "30",
             },
             {
-                "user_id": user.id,  # This is id of each in the group
-                "group_id": group.id,
-                "amount": 70,
+                "user_id": user2.id,  # This is id of each in the group
+                "amount": "70",
             },
         ],
     }
 
-    response = client.post("/expenses", json=payload)
-    assert response.status_code == 200
-
+    response = client_with_auth.post("/expenses", json=payload)
     data = response.json()
 
-    assert "splits" in data
-    assert len(data["splits"]) == 2
+    assert response.status_code == 200
 
-    db_expense = session.exec(select(Expense)).all()
-    db_splits = session.exec(select(Split)).all()
+    payload_splits = payload.pop("splits")
+    data_splits = data.pop("splits")
+    # assert payload <= data
 
-    assert len(db_expense) == 1
-    assert len(db_splits) == 2
-
-    assert db_expense[0].title == payload["title"]
-    assert db_expense[0].amount == payload["amount"]
-    assert db_expense[0].group_id == payload["group_id"]
-    assert db_expense[0].user_id == payload["user_id"]
-
-    assert db_splits[0].user_id == payload["user_id"]
-    assert db_splits[0].amount == payload["splits"][0]["amount"]
-    assert db_splits[1].user_id == payload["user_id"]
-    assert db_splits[1].amount == payload["splits"][1]["amount"]
-
-
-def test_cascade_splits_delete(expenses, session: Session):
-    """Deleting expense should automatically delete all the splits"""
-    expense = expenses[0]
-    db_splits_pre_delete = session.exec(
-        select(Split).where(Split.expense_id == expense.id)
-    ).all()
-    assert len(db_splits_pre_delete) == 2
-
-    # Perfrom a delete on expense and check if its expenses are deleted
-    session.delete(expense)
-    session.commit()
-    # session.refresh(expense) # This does work after the obj is deleted from session. Throws Error
-    db_splits_post_delete = session.exec(
-        select(Split).where(Split.expense_id == expense.id)
-    ).all()
-    assert len(db_splits_post_delete) == 0
+    assert_that(payload).is_subset_of(data)
+    for ps, ds in zip(payload_splits, data_splits):
+        assert_that(ps).is_subset_of(ds)

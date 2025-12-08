@@ -12,15 +12,6 @@ router = APIRouter(
 )
 
 
-@router.post("", response_model=models.UserRead)
-def create_user(user: models.UserCreate, session: Session = Depends(get_session)):
-    db_user = models.User.model_validate(user)
-    session.add(db_user)
-    session.commit()
-    session.refresh(db_user)
-    return db_user
-
-
 @router.get("/{user_id}", response_model=models.UserRead)
 def read_user(
     user_id: int,

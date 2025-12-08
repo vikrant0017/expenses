@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from pydantic import field_serializer
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -12,7 +11,7 @@ def current_time():
 
 # ---- Link/Join Table ----
 class UserGroup(SQLModel, table=True):
-    __tablename__ = "user_group"
+    __tablename__ = "user_group"  # pyright: ignore[reportAssignmentType]
 
     user_id: Optional[int] = Field(
         default=None, foreign_key="users.id", primary_key=True
@@ -24,12 +23,15 @@ class UserGroup(SQLModel, table=True):
 
 # --- User Models ---
 class UserBase(SQLModel):
-    name: str
+    pass
 
 
 class User(UserBase, table=True):
-    __tablename__ = "users"
+    __tablename__ = "users"  # pyright: ignore[reportAssignmentType]
     id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(default=None, unique=True)
+    name: str | None = None
+    password: str  # hashed
 
     # Relationships
     groups: List["Group"] = Relationship(back_populates="users", link_model=UserGroup)
@@ -38,11 +40,14 @@ class User(UserBase, table=True):
 
 
 class UserCreate(UserBase):
-    pass
+    username: str
+    password: str
 
 
 class UserRead(UserBase):
     id: int
+    name: str | None
+    username: str
 
 
 # --- Group Models ---
@@ -51,7 +56,7 @@ class GroupBase(SQLModel):
 
 
 class Group(GroupBase, table=True):
-    __tablename__ = "groups"
+    __tablename__ = "groups"  # pyright: ignore[reportAssignmentType]
     id: Optional[int] = Field(default=None, primary_key=True)
 
     # Relationships
@@ -61,7 +66,6 @@ class Group(GroupBase, table=True):
 
 
 class GroupCreate(GroupBase):
-    user_id: int  # The user requesting to make the group
     pass
 
 
@@ -77,24 +81,24 @@ class ExpenseBase(SQLModel):
     title: str
     description: Optional[str] = None
     amount: Decimal = Field(default=0, max_digits=10, decimal_places=2)
-    group_id: int = Field(foreign_key="groups.id")
-    user_id: int = Field(foreign_key="users.id")  # Payer
 
     # Note: Decimal gets dumped as string in json. I not sure if this the right choice thought
     # Should I instead let the frontend handle it.
-    @field_serializer("amount", when_used="json")
-    def convert_to_float(self, amount) -> float:
-        return float(amount)
+    # @field_serializer("amount", when_used="json")
+    # def convert_to_float(self, amount) -> float:
+    #     return float(amount)
 
 
 class Expense(ExpenseBase, table=True):
-    __tablename__ = "expenses"
+    __tablename__ = "expenses"  # pyright: ignore[reportAssignmentType]
     id: Optional[int] = Field(default=None, primary_key=True)
     timestamp: datetime = Field(default_factory=current_time)
     created_at: datetime = Field(default_factory=current_time)
     updated_at: datetime = Field(
         default_factory=current_time
     )  # Note: onupdate behavior needs manual handling or DB trigger in SQLModel usually, but for now keeping simple
+    group_id: int = Field(foreign_key="groups.id")
+    user_id: int = Field(foreign_key="users.id")  # Payer
 
     # Relationships
     group: Optional[Group] = Relationship(back_populates="expenses")
@@ -107,8 +111,9 @@ class Expense(ExpenseBase, table=True):
 
 class ExpenseCreate(ExpenseBase):
     splits: list[
-        "Split"
+        "SplitCreate"
     ] = []  # Empty list as default since Expense splits relationship expects it to be a list
+    group_id: int
 
 
 class ExpenseRead(ExpenseBase):
@@ -116,24 +121,30 @@ class ExpenseRead(ExpenseBase):
     timestamp: datetime
     created_at: datetime
     updated_at: datetime
-    splits: list["Split"] | None
+    user_id: int
+    group_id: int
+    splits: Optional[list["Split"]] = None
 
 
 # --- Split Models ---
 class SplitBase(SQLModel):
     amount: Decimal = Field(default=0, max_digits=10, decimal_places=2)
+
+
+class Split(SplitBase, table=True):
+    __tablename__ = "splits"  # pyright: ignore[reportAssignmentType]
+    id: Optional[int] = Field(default=None, primary_key=True)
     group_id: int = Field(foreign_key="groups.id")
     expense_id: int = Field(
         foreign_key="expenses.id", ondelete="CASCADE"
     )  # Cascade handled by DB
     user_id: int = Field(foreign_key="users.id")
 
-
-class Split(SplitBase, table=True):
-    __tablename__ = "splits"
-    id: Optional[int] = Field(default=None, primary_key=True)
-
     # Relationships
     group: Optional[Group] = Relationship(back_populates="splits")
     expense: Optional[Expense] = Relationship(back_populates="splits")
     user: Optional[User] = Relationship(back_populates="splits")
+
+
+class SplitCreate(SplitBase):
+    user_id: int
