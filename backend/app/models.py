@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import List, Optional
 
+from pydantic import BaseModel
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -148,3 +149,27 @@ class Split(SplitBase, table=True):
 
 class SplitCreate(SplitBase):
     user_id: int
+
+
+# --- Member Models (Sub Resource for relationship between user and group in UserGroup) ---
+class Member(BaseModel):
+    pass
+
+
+class MemberCreateRequest(Member):
+    id: int
+
+
+class MemberCreate(Member):
+    id: int
+    group_id: int
+
+
+class MemberReadRequest(Member):
+    id: int | None = None
+    group_id: int
+
+
+class MemberRead(Member):
+    id: int | None = None
+    group_id: int

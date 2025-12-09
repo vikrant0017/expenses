@@ -1,6 +1,16 @@
+from typing import Sequence
+
 from sqlmodel import Session, select
 
-from app.models import Group, GroupCreate, UserGroup
+from app.models import (
+    Group,
+    GroupCreate,
+    MemberCreate,
+    MemberRead,
+    User,
+    UserGroup,
+    UserRead,
+)
 
 
 def create_group(session: Session, user_id: int, group: GroupCreate):
@@ -51,3 +61,24 @@ def add_user(session: Session, group_id, user_id):
     session.commit()
     session.refresh(user_group)
     return user_group
+
+
+def create_member(session: Session, member: MemberCreate):
+    """Add member(user) to a group"""
+    # Skipping user_id verification not required as it will be performed as part of auth later
+    user_group = UserGroup(user_id=member.id, group_id=member.group_id)
+    session.add(user_group)
+    session.commit()
+    session.refresh(user_group)
+    return user_group
+
+
+def read_members(session: Session, member: MemberRead) -> Sequence[UserRead]:
+    """Get member(user) to a group"""
+    # Verify if user is part of the group before reading the members
+    members = session.exec(
+        select(User.id, User.username, User.name)
+        .join(UserGroup)
+        .where(UserGroup.group_id == member.group_id)
+    ).all()
+    return [UserRead.model_validate(user) for user in members]
