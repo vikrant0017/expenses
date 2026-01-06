@@ -1,0 +1,3 @@
+{
+  "/groups/:groupId/members": "/members?groupId=:groupId"
+}

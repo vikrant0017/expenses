@@ -1,0 +1,209 @@
+{
+  "expenses": [
+    {
+      "amount": 300,
+      "title": "Drinks",
+      "description": "Party night",
+      "group_id": 1,
+      "splits": [
+        {
+          "name": "Alice Johnson",
+          "id": 1,
+          "amount": 100,
+          "checked": true
+        },
+        {
+          "name": "Bob Smith",
+          "id": 2,
+          "amount": 100,
+          "checked": true
+        },
+        {
+          "name": "Charlie Davis",
+          "id": 3,
+          "amount": 100,
+          "checked": true
+        }
+      ],
+      "timestamp": "2025-12-04T18:30:00.000Z",
+      "id": 6
+    },
+    {
+      "amount": 123,
+      "title": "This is sooooo good",
+      "description": "This is good",
+      "group_id": 1,
+      "splits": [
+        {
+          "name": "Alice Johnson",
+          "id": 1,
+          "amount": 41,
+          "checked": true
+        },
+        {
+          "name": "Bob Smith",
+          "id": 2,
+          "amount": 41,
+          "checked": true
+        },
+        {
+          "name": "Charlie Davis",
+          "id": 3,
+          "amount": 42,
+          "checked": true
+        },
+        {
+          "name": "Alice Johnson",
+          "id": 4,
+          "checked": false
+        },
+        {
+          "name": "Bob Smith",
+          "id": 5,
+          "checked": false
+        }
+      ],
+      "timestamp": "2025-12-31T13:41:51.052Z",
+      "id": 8
+    },
+    {
+      "amount": 326,
+      "title": "Hello moto",
+      "description": "Why",
+      "group_id": 1,
+      "splits": [
+        {
+          "name": "Alice Johnson",
+          "id": 1,
+          "amount": 65.2,
+          "checked": true
+        },
+        {
+          "name": "Bob Smith",
+          "id": 2,
+          "amount": 65.2,
+          "checked": true
+        },
+        {
+          "name": "Charlie Davis",
+          "id": 3,
+          "amount": 65.2,
+          "checked": true
+        },
+        {
+          "name": "Alice Johnson",
+          "id": 4,
+          "amount": 65.2,
+          "checked": true
+        },
+        {
+          "name": "Bob Smith",
+          "id": 5,
+          "amount": 65.2,
+          "checked": true
+        }
+      ],
+      "timestamp": "2025-12-31T13:45:13.020Z",
+      "id": 9
+    }
+  ],
+  "members": [
+    {
+      "id": 1,
+      "name": "Alice Johnson",
+      "username": "alice.j",
+      "groupId": 1
+    },
+    {
+      "id": 2,
+      "name": "Bob Smith",
+      "username": "bob.smith",
+      "groupId": 1
+    },
+    {
+      "id": 3,
+      "name": "Charlie Davis",
+      "username": "charlie.d",
+      "groupId": 1
+    },
+    {
+      "id": 4,
+      "name": "Alice Johnson",
+      "username": "alice.j",
+      "groupId": 1
+    },
+    {
+      "id": 5,
+      "name": "Bob Smith",
+      "username": "bob.smith",
+      "groupId": 1
+    },
+    {
+      "id": 6,
+      "name": "Charlie Davis",
+      "username": "charlie.d",
+      "groupId": 2
+    },
+    {
+      "id": 7,
+      "name": "Diana Martinez",
+      "username": "diana.m",
+      "groupId": 2
+    },
+    {
+      "id": 8,
+      "name": "Bob Smith",
+      "username": "bob.smith",
+      "groupId": 3
+    },
+    {
+      "id": 9,
+      "name": "Diana Martinez",
+      "username": "diana.m",
+      "groupId": 3
+    }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "name": "Alice Johnson",
+      "username": "alicej",
+      "password": "password"
+    },
+    {
+      "id": 2,
+      "name": "Bob Smith",
+      "username": "bobsmith",
+      "password": "password"
+    },
+    {
+      "id": 3,
+      "name": "Charlie Davis",
+      "username": "charlied",
+      "password": "password"
+    },
+    {
+      "id": 4,
+      "name": "Diana Martinez",
+      "username": "dianam",
+      "password": "password"
+    }
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "name": "Household Expenses",
+      "code": "EI3K4H"
+    },
+    {
+      "id": 2,
+      "name": "Vacation Group",
+      "code": "LI3H4H"
+    },
+    {
+      "id": 3,
+      "name": "Weekend Trip",
+      "code": "AI3I4H"
+    }
+  ]
+}
