@@ -155,4 +155,4 @@ def user_group_factory(request):
 @pytest.fixture(name="group")
 def get_group(session: Session, authenticated_user: User):
     group = GroupCreate(name="Group 1")
-    return create_group(session, authenticated_user.id, group)  # pyright: ignore[reportArgumentType]
+    return create_group(session, authenticated_user.id, group)  # ty: ignore[invalid-argument-type]

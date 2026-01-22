@@ -23,3 +23,5 @@ wheels/
 
 # Backlog.md directory
 backlog/
+
+.coverage
